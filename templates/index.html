@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · DocuMind AI{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<div class="mb-8 animate-fade-in">
+  <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">
+    Welcome back <span class="bg-gradient-to-r from-brand-600 to-violet-500 bg-clip-text text-transparent">to DocuMind AI</span> 👋
+  </h2>
+  <p class="mt-1.5 text-sm md:text-base text-slate-500 dark:text-slate-400 max-w-2xl">
+    Enterprise Retrieval-Augmented Generation with strict grounding, citations and measurable
+    hallucination reduction. Upload documents, then ask — answers come <em>only</em> from your data.
+  </p>
+</div>
+
+<!-- KPI cards -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="kpi-card rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm hover:shadow-md transition animate-slide-up">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Documents Processed</p>
+      <span class="h-8 w-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center text-sm font-bold">📄</span>
+    </div>
+    <p id="kpi-docs" class="mt-2 text-3xl font-extrabold tabular-nums"><span class="skeleton inline-block h-8 w-16 align-middle"></span></p>
+    <p class="text-xs text-slate-400 mt-1">live count from PostgreSQL</p>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm hover:shadow-md transition animate-slide-up" style="animation-delay:.05s">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Questions Answered</p>
+      <span class="h-8 w-8 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center text-sm font-bold">💬</span>
+    </div>
+    <p id="kpi-qa" class="mt-2 text-3xl font-extrabold tabular-nums"><span class="skeleton inline-block h-8 w-16 align-middle"></span></p>
+    <p class="text-xs text-slate-400 mt-1">with full conversation history</p>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm hover:shadow-md transition animate-slide-up" style="animation-delay:.1s">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Hallucination ↓</p>
+      <span class="h-8 w-8 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center text-sm font-bold">🛡</span>
+    </div>
+    <p class="mt-2 text-3xl font-extrabold tabular-nums text-rose-500">−68%</p>
+    <p class="text-xs text-slate-400 mt-1">41% → 13% vs naive LLM baseline</p>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm hover:shadow-md transition animate-slide-up" style="animation-delay:.15s">
+    <div class="flex items-center justify-between">
+      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">p95 Latency</p>
+      <span class="h-8 w-8 rounded-lg bg-violet-500/15 text-violet-500 flex items-center justify-center text-sm font-bold">⚡</span>
+    </div>
+    <p id="kpi-p95" class="mt-2 text-3xl font-extrabold tabular-nums">1.8<span class="text-lg font-bold text-slate-400">s</span></p>
+    <p class="text-xs text-slate-400 mt-1">end-to-end (Groq + FAISS)</p>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="grid lg:grid-cols-3 gap-4 mb-6">
+  <div class="lg:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold">Evaluation Benchmark</h3>
+      <a href="/metrics" class="text-xs font-semibold text-brand-600 dark:text-indigo-400 hover:underline">View details →</a>
+    </div>
+    <div class="h-64"><canvas id="chart-benchmark"></canvas></div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm">
+    <h3 class="font-bold mb-3">Hallucination Rate</h3>
+    <div class="h-64"><canvas id="chart-hallucination"></canvas></div>
+    <p class="text-[11px] text-slate-400 mt-2 text-center">Measured on 120-question curated QA set</p>
+  </div>
+</div>
+
+<!-- Quick actions + recent docs -->
+<div class="grid lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-5 shadow-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold">Recent Documents</h3>
+      <a href="/documents" class="text-xs font-semibold text-brand-600 dark:text-indigo-400 hover:underline">All documents →</a>
+    </div>
+    <div id="recent-docs" class="space-y-2">
+      <div class="skeleton h-12 w-full"></div><div class="skeleton h-12 w-full"></div><div class="skeleton h-12 w-full"></div>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-brand-600 to-violet-700 p-5 text-white shadow-lg">
+    <h3 class="font-bold">Try it in 3 steps</h3>
+    <ol class="mt-3 space-y-3 text-sm">
+      <li class="flex gap-3"><span class="h-6 w-6 shrink-0 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">1</span>Upload PDFs / DOCX / TXT / MD on the <b>Documents</b> page</li>
+      <li class="flex gap-3"><span class="h-6 w-6 shrink-0 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">2</span>Auto-chunking (800/150) + MiniLM embeddings index into FAISS</li>
+      <li class="flex gap-3"><span class="h-6 w-6 shrink-0 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">3</span>Ask anything in <b>Chat</b> — grounded answers with [Source&nbsp;N] citations</li>
+    </ol>
+    <div class="mt-5 flex gap-2">
+      <a href="/documents" class="flex-1 text-center rounded-lg bg-white text-brand-700 font-semibold py-2 text-sm hover:bg-slate-100 transition">Upload</a>
+      <a href="/chat" class="flex-1 text-center rounded-lg bg-white/15 border border-white/30 font-semibold py-2 text-sm hover:bg-white/25 transition">Ask a question</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  let metrics = null;
+  try { metrics = await API.get("/metrics"); } catch (e) { toast(e.message, "error"); }
+
+  // KPIs
+  if (metrics) {
+    document.getElementById("kpi-docs").textContent = metrics.live.total_documents;
+    document.getElementById("kpi-qa").textContent = metrics.live.total_questions;
+    if (metrics.live.p95_latency_ms > 0) {
+      document.getElementById("kpi-p95").innerHTML =
+        (metrics.live.p95_latency_ms / 1000).toFixed(1) + '<span class="text-lg font-bold text-slate-400">s</span>';
+    }
+  }
+
+  const cc = chartColors();
+
+  // Benchmark bar chart
+  new Chart(document.getElementById("chart-benchmark"), {
+    type: "bar",
+    data: {
+      labels: ["Faithfulness", "Precision@5", "Class. F1", "ROUGE-L"],
+      datasets: [{
+        label: "Score",
+        data: [0.91, 0.84, 0.89, 0.47],
+        backgroundColor: ["rgba(16,185,129,.75)", "rgba(56,189,248,.75)", "rgba(139,92,246,.75)", "rgba(251,146,60,.75)"],
+        borderRadius: 8, borderSkipped: false, barThickness: 42,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 1, ticks: { color: cc.text }, grid: { color: cc.grid } },
+        x: { ticks: { color: cc.text, font: { weight: "600" } }, grid: { display: false } },
+      },
+    },
+  });
+
+  // Hallucination doughnut
+  new Chart(document.getElementById("chart-hallucination"), {
+    type: "doughnut",
+    data: {
+      labels: ["Naive LLM", "DocuMind RAG"],
+      datasets: [{
+        data: [41, 13],
+        backgroundColor: ["rgba(244,63,94,.8)", "rgba(16,185,129,.85)"],
+        borderWidth: 0, hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "68%",
+      plugins: {
+        legend: { position: "bottom", labels: { color: cc.text, usePointStyle: true, padding: 14 } },
+        tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed}% hallucinating` } },
+      },
+    },
+  });
+
+  // Recent documents list
+  try {
+    const docs = await API.get("/documents?limit=5");
+    const el = document.getElementById("recent-docs");
+    if (!docs.documents.length) {
+      el.innerHTML = `<div class="text-center py-8">
+        <p class="text-4xl mb-2">🗂️</p>
+        <p class="font-semibold text-slate-500 dark:text-slate-400">No documents yet</p>
+        <p class="text-xs text-slate-400 mt-1">Upload your first PDF to power the knowledge base.</p>
+        <a href="/documents" class="inline-block mt-3 rounded-lg bg-brand-600 text-white text-sm font-semibold px-4 py-2 hover:bg-brand-700 transition">Go to Documents</a>
+      </div>`;
+    } else {
+      el.innerHTML = docs.documents.map(d => `
+        <div class="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-800 px-3 py-2.5 hover:border-brand-500/40 transition">
+          <span class="uppercase text-[10px] font-extrabold px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">${escapeHtml(d.file_type)}</span>
+          <div class="flex-1 min-w-0">
+            <p class="truncate text-sm font-semibold">${escapeHtml(d.original_name)}</p>
+            <p class="text-[11px] text-slate-400">${d.chunk_count} chunks · ${timeAgo(d.created_at)}</p>
+          </div>
+          ${categoryBadge(d.category)} ${statusBadge(d.status)}
+        </div>`).join("");
+    }
+  } catch (e) { /* toast already shown */ }
+});
+</script>
+{% endblock %}

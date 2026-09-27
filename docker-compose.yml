@@ -1,0 +1,53 @@
+# =============================================================================
+# DocuMind AI – full local stack: PostgreSQL + FastAPI API + Flask dashboard
+# =============================================================================
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: documind
+      POSTGRES_PASSWORD: documind
+      POSTGRES_DB: documind
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U documind"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://documind:documind@db:5432/documind
+    command: sh -c "python scripts/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./faiss_index:/app/faiss_index
+    depends_on:
+      db:
+        condition: service_healthy
+
+  dashboard:
+    build: .
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_BASE: http://localhost:8000
+      DASHBOARD_PORT: "5000"
+    command: python -m app.flask_app
+    ports:
+      - "5000:5000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

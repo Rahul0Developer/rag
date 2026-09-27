@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DocuMind AI{% endblock %}</title>
+
+  <!-- Tailwind CSS (CDN) with class-based dark mode -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#eef2ff',100:'#e0e7ff',500:'#6366f1',600:'#4f46e5',700:'#4338ca' },
+            surface: { light:'#f8fafc', dark:'#0b1120', card:'#111a2e' }
+          },
+          fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'] },
+          animation: { 'fade-in': 'fadeIn .35s ease-out', 'slide-up': 'slideUp .3s ease-out' },
+          keyframes: {
+            fadeIn: { '0%': {opacity:0}, '100%': {opacity:1} },
+            slideUp: { '0%': {opacity:0, transform:'translateY(8px)'}, '100%': {opacity:1, transform:'translateY(0)'} }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+  <script>
+    // Apply saved theme before first paint to avoid flash.
+    if (localStorage.getItem('documind-theme') === 'dark' ||
+        (!localStorage.getItem('documind-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+</head>
+<body class="h-full bg-slate-50 text-slate-800 antialiased dark:bg-surface-dark dark:text-slate-200">
+
+<div x-data-class id="app" class="flex h-full">
+
+  <!-- ============================ Sidebar ============================ -->
+  <aside class="hidden md:flex w-64 flex-col border-r border-slate-200 bg-white dark:bg-surface-card dark:border-slate-800 shrink-0">
+    <div class="flex items-center gap-3 px-5 h-16 border-b border-slate-200 dark:border-slate-800">
+      <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-white font-bold shadow-lg shadow-brand-500/25">D</div>
+      <div>
+        <p class="font-bold leading-tight tracking-tight">DocuMind AI</p>
+        <p class="text-[11px] text-slate-400 font-medium">Document Intelligence</p>
+      </div>
+    </div>
+
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      {% set nav_items = [
+        ('dashboard', '/', 'Dashboard', 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3m10-11v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'),
+        ('documents', '/documents', 'Documents', 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'),
+        ('chat', '/chat', 'Ask Documents', 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.9-3.8A8.6 8.6 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'),
+        ('metrics', '/metrics', 'Evaluation Metrics', 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'),
+        ('settings', '/settings', 'Settings', 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'),
+      ] %}
+      {% for key, href, label, icon in nav_items %}
+      <a href="{{ href }}"
+         class="nav-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150
+                {% if page == key %}bg-brand-600 text-white shadow-md shadow-brand-600/30{% else %}text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-white{% endif %}">
+        <svg class="w-5 h-5 {% if page != key %}opacity-70 group-hover:opacity-100{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ icon }}"/></svg>
+        {{ label }}
+      </a>
+      {% endfor %}
+
+      <div class="pt-4 mt-2 border-t border-slate-200 dark:border-slate-800">
+        <p class="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Pipeline</p>
+        <div class="px-3 space-y-2 text-xs text-slate-500 dark:text-slate-400">
+          <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> all-MiniLM-L6-v2 · FAISS</div>
+          <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-violet-500"></span> Groq · llama-3.3-70b</div>
+          <div class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-sky-500"></span> Strict grounded RAG</div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="p-4 border-t border-slate-200 dark:border-slate-800">
+      <div class="rounded-xl bg-gradient-to-br from-brand-600 to-violet-600 p-4 text-white shadow-lg">
+        <p class="text-xs font-semibold opacity-90">Hallucination rate</p>
+        <p class="text-2xl font-extrabold mt-1">↓ 68%</p>
+        <p class="text-[11px] opacity-80 mt-1">41% → 13% vs naive LLM baseline</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================ Main column ======================== -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- Top bar -->
+    <header class="h-16 flex items-center justify-between px-4 md:px-8 border-b border-slate-200 bg-white/80 backdrop-blur dark:bg-surface-dark/80 dark:border-slate-800 sticky top-0 z-30">
+      <div class="flex items-center gap-3">
+        <!-- mobile menu -->
+        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <h1 class="text-lg font-bold tracking-tight">{% block page_title %}DocuMind AI{% endblock %}</h1>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div id="backend-status" class="hidden sm:flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-card">
+          <span id="status-dot" class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+          <span id="status-text">checking…</span>
+        </div>
+        <button id="theme-toggle" aria-label="Toggle dark mode"
+                class="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 transition">
+          <svg id="icon-sun" class="w-5 h-5 hidden dark:block text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg id="icon-moon" class="w-5 h-5 block dark:hidden text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Mobile nav drawer -->
+    <div id="mobile-nav" class="md:hidden hidden border-b border-slate-200 bg-white dark:bg-surface-card dark:border-slate-800 px-4 py-3 space-y-1">
+      <a href="/" class="block px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800">Dashboard</a>
+      <a href="/documents" class="block px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800">Documents</a>
+      <a href="/chat" class="block px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800">Ask Documents</a>
+      <a href="/metrics" class="block px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800">Metrics</a>
+      <a href="/settings" class="block px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800">Settings</a>
+    </div>
+
+    <!-- Page content -->
+    <main class="flex-1 overflow-y-auto px-4 md:px-8 py-6 lg:py-8">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="px-8 py-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+      <span>DocuMind AI v1.0.0 — Enterprise Document Intelligence</span>
+      <span>FastAPI · FAISS · sentence-transformers · Groq llama-3.3-70b-versatile</span>
+    </footer>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 max-w-sm"></div>
+
+<script>window.API_BASE = "{{ api_base }}";</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

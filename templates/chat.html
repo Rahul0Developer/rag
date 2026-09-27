@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Ask Documents · DocuMind AI{% endblock %}
+{% block page_title %}Ask Documents{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto flex flex-col h-full" style="min-height: calc(100vh - 13rem);">
+
+  <!-- Header strip -->
+  <div class="flex items-center justify-between mb-4 animate-fade-in">
+    <div class="flex items-center gap-3">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 text-white flex items-center justify-center font-bold shadow-lg shadow-brand-500/25">AI</div>
+      <div>
+        <p class="font-bold leading-tight">Grounded Q&amp;A</p>
+        <p class="text-xs text-slate-400">Answers cite only your uploaded documents — with refusal when evidence is missing.</p>
+      </div>
+    </div>
+    <button id="new-chat-btn" class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition">+ New chat</button>
+  </div>
+
+  <!-- Messages -->
+  <div id="messages" class="flex-1 space-y-4 overflow-y-auto pb-4">
+    <!-- Empty state -->
+    <div id="chat-empty" class="text-center py-14 animate-fade-in">
+      <p class="text-5xl mb-3">💬</p>
+      <p class="font-bold text-lg">Ask anything about your documents</p>
+      <p class="text-sm text-slate-400 mt-1 max-w-md mx-auto">Every answer is generated strictly from retrieved context and includes clickable source citations.</p>
+      <div class="flex flex-wrap justify-center gap-2 mt-5">
+        <button class="suggestion rounded-full border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm hover:border-brand-500 hover:text-brand-600 dark:hover:text-indigo-400 transition">What are the key terms and conditions?</button>
+        <button class="suggestion rounded-full border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm hover:border-brand-500 hover:text-brand-600 dark:hover:text-indigo-400 transition">Summarize the main findings</button>
+        <button class="suggestion rounded-full border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm hover:border-brand-500 hover:text-brand-600 dark:hover:text-indigo-400 transition">Who are the parties involved?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Composer -->
+  <div class="sticky bottom-0 pt-3 pb-2">
+    <form id="chat-form" class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-card shadow-lg p-2 flex items-end gap-2 focus-within:border-brand-500/60 transition">
+      <textarea id="question" rows="1" placeholder="Ask a question about your documents…"
+                class="flex-1 resize-none bg-transparent px-3 py-2.5 text-sm outline-none max-h-36 placeholder:text-slate-400"></textarea>
+      <button id="send-btn" type="submit"
+              class="h-10 w-10 shrink-0 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white flex items-center justify-center transition shadow-md shadow-brand-600/30">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+      </button>
+    </form>
+    <p class="text-center text-[11px] text-slate-400 mt-2">
+      🔒 Strict grounding: if the answer isn't in your documents, DocuMind refuses instead of guessing.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let conversationId = null;
+let busy = false;
+
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("chat-form");
+  const input = document.getElementById("question");
+  form.addEventListener("submit", (e) => { e.preventDefault(); ask(input.value.trim()); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+  });
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 144) + "px";
+  });
+  document.getElementById("new-chat-btn").addEventListener("click", () => {
+    conversationId = null;
+    document.getElementById("messages").innerHTML = document.getElementById("chat-empty")
+      ? messagesEmptyHtml() : "";
+    toast("Started a new conversation", "info", 2200);
+  });
+  document.querySelectorAll(".suggestion").forEach(b =>
+    b.addEventListener("click", () => { input.value = b.textContent; input.focus(); }));
+});
+
+function messagesEmptyHtml() {
+  return `
+  <div id="chat-empty" class="text-center py-14 animate-fade-in">
+    <p class="text-5xl mb-3">💬</p>
+    <p class="font-bold text-lg">Ask anything about your documents</p>
+    <p class="text-sm text-slate-400 mt-1">Every answer includes clickable source citations.</p>
+  </div>`;
+}
+
+async function ask(question) {
+  if (!question || busy) return;
+  busy = true;
+  const sendBtn = document.getElementById("send-btn");
+  sendBtn.disabled = true;
+  const input = document.getElementById("question");
+  input.value = ""; input.style.height = "auto";
+
+  const box = document.getElementById("messages");
+  const emptyEl = document.getElementById("chat-empty");
+  if (emptyEl) emptyEl.remove();
+
+  // User bubble
+  box.insertAdjacentHTML("beforeend", `
+    <div class="flex justify-end animate-slide-up">
+      <div class="max-w-[80%] rounded-2xl rounded-br-md bg-brand-600 text-white px-4 py-3 text-sm shadow-md">${escapeHtml(question)}</div>
+    </div>`);
+
+  // Typing indicator
+  const typingId = "typing-" + Date.now();
+  box.insertAdjacentHTML("beforeend", `
+    <div id="${typingId}" class="flex items-start gap-3 animate-fade-in">
+      <div class="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 text-white flex items-center justify-center text-xs font-bold">AI</div>
+      <div class="rounded-2xl rounded-tl-md bg-white dark:bg-surface-card border border-slate-200 dark:border-slate-700 px-4 py-3 text-slate-400 flex gap-1.5 items-center">
+        <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+      </div>
+    </div>`);
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const res = await API.post("/qa", { question, conversation_id: conversationId });
+    conversationId = res.conversation_id;
+    document.getElementById(typingId)?.remove();
+    renderAnswer(res);
+  } catch (e) {
+    document.getElementById(typingId)?.remove();
+    box.insertAdjacentHTML("beforeend", `
+      <div class="flex justify-start animate-slide-up">
+        <div class="max-w-[80%] rounded-2xl rounded-tl-md bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 px-4 py-3 text-sm">⚠ ${escapeHtml(e.message)}</div>
+      </div>`);
+  } finally {
+    busy = false; sendBtn.disabled = false;
+    box.scrollTop = box.scrollHeight;
+  }
+}
+
+function renderAnswer(res) {
+  const box = document.getElementById("messages");
+  const grounded = res.answered_from_context;
+  const confPct = Math.round((res.confidence || 0) * 100);
+  const sourcesHtml = res.citations.map((c, i) => `
+    <button onclick='toggleSource(${JSON.stringify(c).replaceAll("'","&#39;")})'
+      class="source-card text-left w-full rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-xs font-bold text-brand-600 dark:text-indigo-400">S${i + 1}</span>
+        <span class="text-[10px] text-slate-400 truncate flex-1 text-right">${escapeHtml(c.document_name)} · chunk #${c.chunk_id}</span>
+        <span class="text-[10px] font-semibold tabular-nums ${c.score > 0.45 ? "text-emerald-500" : c.score > 0.3 ? "text-amber-500" : "text-slate-400"}">${(c.score).toFixed(2)}</span>
+      </div>
+      <div class="snippet hidden mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 border-t border-dashed border-slate-200 dark:border-slate-700 pt-2">${escapeHtml(c.snippet)}</div>
+    </button>`).join("");
+
+  box.insertAdjacentHTML("beforeend", `
+    <div class="flex items-start gap-3 animate-slide-up">
+      <div class="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 text-white flex items-center justify-center text-xs font-bold">AI</div>
+      <div class="max-w-[85%] flex-1">
+        <div class="rounded-2xl rounded-tl-md bg-white dark:bg-surface-card border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm shadow-sm">
+          <div class="answer-body">${renderAnswerText(res.answer)}</div>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${grounded ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/15 text-amber-600 dark:text-amber-400"}">
+            ${grounded ? "✓ Grounded in sources" : "∅ No supporting evidence"}
+          </span>
+          <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-slate-500 dark:text-slate-400">confidence ${confPct}%</span>
+          <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-slate-500 dark:text-slate-400">retrieval ${res.retrieval_latency_ms}ms · generation ${res.generation_latency_ms}ms</span>
+        </div>
+        ${res.citations.length ? `<div class="mt-3 grid gap-1.5">${sourcesHtml}</div>` : ""}
+      </div>
+    </div>`);
+}
+
+function renderAnswerText(text) { return renderAnswer(text); }
+
+function toggleSource(cardData) { /* snippet toggling handled inline below */ }
+
+// Event delegation for snippet expand/collapse.
+document.getElementById("messages").addEventListener("click", (e) => {
+  const card = e.target.closest(".source-card");
+  if (!card) return;
+  const snip = card.querySelector(".snippet");
+  if (snip) snip.classList.toggle("hidden");
+});
+</script>
+{% endblock %}
