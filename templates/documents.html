@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Documents · DocuMind AI{% endblock %}
+{% block page_title %}Documents{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+
+  <!-- Upload dropzone -->
+  <div id="dropzone"
+       class="dropzone rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-surface-card p-8 text-center transition cursor-pointer hover:border-brand-500/60 mb-6 animate-fade-in">
+    <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.md" class="hidden">
+    <div class="mx-auto h-14 w-14 rounded-2xl bg-brand-600/10 text-brand-600 dark:text-indigo-400 flex items-center justify-center mb-3">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+    </div>
+    <p class="font-bold text-lg">Drop files here or <span class="text-brand-600 dark:text-indigo-400">browse</span></p>
+    <p class="text-sm text-slate-400 mt-1">PDF · DOCX · TXT · Markdown — up to {{ "%d"|format(25) }} MB each, multiple files supported</p>
+    <div id="upload-progress" class="hidden mt-4 max-w-md mx-auto">
+      <div class="flex items-center gap-2 text-sm font-medium text-brand-600 dark:text-indigo-400 justify-center">
+        <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        Ingesting: extracting → chunking (800/150) → embedding → FAISS…
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div>
+      <h3 class="font-bold text-lg">Knowledge Base</h3>
+      <p id="doc-count" class="text-xs text-slate-400">— documents indexed</p>
+    </div>
+    <div class="flex gap-2">
+      <select id="filter-category" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-card px-3 py-2 text-sm">
+        <option value="">All categories</option>
+        <option>Invoice</option><option>Contract</option><option>Report</option>
+        <option>Resume</option><option>Research Paper</option><option>Policy</option><option>Other</option>
+      </select>
+      <button id="rebuild-btn" title="Rebuild FAISS index from PostgreSQL"
+              class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-card px-3 py-2 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+        ♻ Rebuild Index
+      </button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40">
+            <th class="px-4 py-3 font-semibold">Document</th>
+            <th class="px-4 py-3 font-semibold">Type</th>
+            <th class="px-4 py-3 font-semibold">Size</th>
+            <th class="px-4 py-3 font-semibold">Chunks</th>
+            <th class="px-4 py-3 font-semibold">Category</th>
+            <th class="px-4 py-3 font-semibold">Status</th>
+            <th class="px-4 py-3 font-semibold">Uploaded</th>
+            <th class="px-4 py-3 font-semibold text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="docs-tbody">
+          <tr><td colspan="8" class="px-4 py-6"><div class="skeleton h-8 w-full"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="docs-empty" class="hidden text-center py-14">
+      <p class="text-4xl mb-2">📄</p>
+      <p class="font-semibold text-slate-500 dark:text-slate-400">No documents yet</p>
+      <p class="text-xs text-slate-400 mt-1">Upload files above — they are automatically chunked, embedded and indexed.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Summary modal -->
+<div id="summary-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+  <div class="w-full max-w-2xl rounded-2xl bg-white dark:bg-surface-card border border-slate-200 dark:border-slate-700 shadow-2xl animate-slide-up">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+      <h4 class="font-bold">Summary <span id="summary-doc-name" class="text-slate-400 font-medium text-sm"></span></h4>
+      <button onclick="closeSummary()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">✕</button>
+    </div>
+    <div class="px-5 py-3 flex gap-2 border-b border-slate-100 dark:border-slate-800">
+      <button data-mode="short" class="mode-btn rounded-lg px-3 py-1.5 text-sm font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Short</button>
+      <button data-mode="medium" class="mode-btn rounded-lg px-3 py-1.5 text-sm font-semibold bg-brand-600 text-white">Medium</button>
+      <button data-mode="detailed" class="mode-btn rounded-lg px-3 py-1.5 text-sm font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Detailed</button>
+      <button id="classify-btn" class="ml-auto rounded-lg px-3 py-1.5 text-sm font-semibold border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40">Re-classify</button>
+    </div>
+    <div id="summary-body" class="px-5 py-5 max-h-96 overflow-y-auto text-sm leading-relaxed answer-body">
+      Choose a mode to generate a Groq-powered summary.
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSummaryDoc = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  const dz = document.getElementById("dropzone");
+  const input = document.getElementById("file-input");
+  dz.addEventListener("click", () => input.click());
+  dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("dragover"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+  dz.addEventListener("drop", (e) => {
+    e.preventDefault(); dz.classList.remove("dragover");
+    uploadFiles(e.dataTransfer.files);
+  });
+  input.addEventListener("change", () => uploadFiles(input.files));
+  document.getElementById("filter-category").addEventListener("change", loadDocs);
+  document.getElementById("rebuild-btn").addEventListener("click", rebuildIndex);
+  loadDocs();
+});
+
+async function uploadFiles(files) {
+  if (!files || !files.length) return;
+  const progress = document.getElementById("upload-progress");
+  progress.classList.remove("hidden");
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  try {
+    const res = await API.upload("/documents/upload", fd);
+    toast(`${res.uploaded.length} document(s) ingested & indexed`, "success");
+    if (res.failed.length) toast(`${res.failed.length} failed: ${res.failed.map(f => f.file).join(", ")}`, "warn");
+    loadDocs();
+  } catch (e) { toast(e.message, "error"); }
+  finally { progress.classList.add("hidden"); document.getElementById("file-input").value = ""; }
+}
+
+async function loadDocs() {
+  const cat = document.getElementById("filter-category").value;
+  const tbody = document.getElementById("docs-tbody");
+  tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6"><div class="skeleton h-8 w-full"></div></td></tr>';
+  try {
+    const data = await API.get(`/documents${cat ? `?category=${encodeURIComponent(cat)}` : ""}`);
+    document.getElementById("doc-count").textContent = `${data.total} document(s) indexed`;
+    const empty = document.getElementById("docs-empty");
+    if (!data.documents.length) {
+      tbody.innerHTML = ""; empty.classList.remove("hidden"); return;
+    }
+    empty.classList.add("hidden");
+    tbody.innerHTML = data.documents.map(d => `
+      <tr class="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/70 dark:hover:bg-slate-900/30 transition">
+        <td class="px-4 py-3 font-semibold max-w-xs truncate">${escapeHtml(d.original_name)}</td>
+        <td class="px-4 py-3"><span class="uppercase text-[10px] font-extrabold px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">${escapeHtml(d.file_type)}</span></td>
+        <td class="px-4 py-3 tabular-nums text-slate-500">${formatBytes(d.file_size_bytes)}</td>
+        <td class="px-4 py-3 tabular-nums text-slate-500">${d.chunk_count}</td>
+        <td class="px-4 py-3">${categoryBadge(d.category)}${d.category_confidence ? `<span class="text-[10px] text-slate-400 ml-1">${Math.round(d.category_confidence*100)}%</span>` : ""}</td>
+        <td class="px-4 py-3">${statusBadge(d.status)}</td>
+        <td class="px-4 py-3 text-slate-500 text-xs">${timeAgo(d.created_at)}</td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <button onclick="openSummary(${d.id}, '${escapeHtml(d.original_name).replaceAll("'","&#39;")}')" class="text-xs font-semibold text-brand-600 dark:text-indigo-400 hover:underline mr-3">Summarize</button>
+          <button onclick="deleteDoc(${d.id})" class="text-xs font-semibold text-rose-500 hover:underline">Delete</button>
+        </td>
+      </tr>`).join("");
+  } catch (e) {
+    tbody.innerHTML = "";
+    toast(e.message, "error");
+  }
+}
+
+async function deleteDoc(id) {
+  if (!confirm("Delete this document and its vectors?")) return;
+  try {
+    await API.del(`/documents/${id}`);
+    toast("Document deleted", "success");
+    loadDocs();
+  } catch (e) { toast(e.message, "error"); }
+}
+
+async function rebuildIndex() {
+  toast("Rebuilding FAISS index from PostgreSQL chunks…", "info");
+  try {
+    const res = await API.post("/documents/rebuild-index", {});
+    toast(`Index rebuilt with ${res.vectors} vectors`, "success");
+  } catch (e) { toast(e.message, "error"); }
+}
+
+/* --------------------------------------------------------- summary modal */
+function openSummary(id, name) {
+  currentSummaryDoc = id;
+  document.getElementById("summary-doc-name").textContent = "· " + name;
+  document.getElementById("summary-body").innerHTML = "Choose a mode to generate a Groq-powered summary.";
+  const m = document.getElementById("summary-modal");
+  m.classList.remove("hidden"); m.classList.add("flex");
+}
+function closeSummary() {
+  const m = document.getElementById("summary-modal");
+  m.classList.add("hidden"); m.classList.remove("flex");
+}
+document.querySelectorAll(".mode-btn").forEach(btn => btn.addEventListener("click", async (e) => {
+  document.querySelectorAll(".mode-btn").forEach(b => { b.className = "mode-btn rounded-lg px-3 py-1.5 text-sm font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"; });
+  e.target.className = "mode-btn rounded-lg px-3 py-1.5 text-sm font-semibold bg-brand-600 text-white";
+  await runSummary(e.target.dataset.mode);
+}));
+
+async function runSummary(mode) {
+  if (!currentSummaryDoc) return;
+  const body = document.getElementById("summary-body");
+  body.innerHTML = `<div class="flex items-center gap-2 text-brand-600 dark:text-indigo-400"><svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating ${mode} summary…</div>`;
+  try {
+    const res = await API.post("/summarize", { document_id: currentSummaryDoc, mode });
+    body.innerHTML = renderAnswer(res.summary);
+  } catch (e) { body.innerHTML = `<p class="text-rose-500">${escapeHtml(e.message)}</p>`; }
+}
+
+document.getElementById("classify-btn").addEventListener("click", async () => {
+  if (!currentSummaryDoc) return;
+  try {
+    const res = await API.post("/classify", { document_id: currentSummaryDoc });
+    toast(`Classified as ${res.category} (${Math.round(res.confidence * 100)}%)`, "success");
+    loadDocs();
+  } catch (e) { toast(e.message, "error"); }
+});
+</script>
+{% endblock %}
