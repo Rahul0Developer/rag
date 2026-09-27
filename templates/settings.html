@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Settings · DocuMind AI{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+  <!-- System status -->
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-6 shadow-sm animate-fade-in">
+    <h3 class="font-bold text-lg mb-4">System Status</h3>
+    <div id="health-grid" class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+      <div class="skeleton h-16 w-full"></div><div class="skeleton h-16 w-full"></div><div class="skeleton h-16 w-full"></div>
+    </div>
+  </div>
+
+  <!-- LLM configuration -->
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-6 shadow-sm">
+    <h3 class="font-bold text-lg mb-1">LLM Configuration</h3>
+    <p class="text-xs text-slate-400 mb-4">Values are read-only here — edit <code>.env</code> and restart (12-factor design). Provider is swappable via the OpenAI-compatible client.</p>
+    <dl class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+      <div class="flex justify-between py-2.5"><dt class="text-slate-500">Provider</dt><dd class="font-semibold">{{ llm_provider }} → api.groq.com</dd></div>
+      <div class="flex justify-between py-2.5"><dt class="text-slate-500">Model</dt><dd class="font-semibold">{{ llm_model }}</dd></div>
+      <div class="flex justify-between py-2.5"><dt class="text-slate-500">Embedding model</dt><dd class="font-semibold">{{ embedding_model.split('/')[-1] }} (384-d)</dd></div>
+      <div class="flex justify-between py-2.5"><dt class="text-slate-500">Temperature</dt><dd class="font-semibold">0.0 (deterministic)</dd></div>
+      <div class="flex justify-between py-2.5">
+        <dt class="text-slate-500">Groq API key</dt>
+        <dd>{% if groq_key_set %}<span class="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold">✓ configured</span>
+           {% else %}<a href="https://console.groq.com/keys" target="_blank" class="rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2.5 py-1 text-xs font-bold">⚠ not set — get a free key</a>{% endif %}</dd>
+      </div>
+    </dl>
+  </div>
+
+  <!-- RAG pipeline -->
+  <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-card p-6 shadow-sm">
+    <h3 class="font-bold text-lg mb-4">RAG Pipeline</h3>
+    <div class="grid grid-cols-3 gap-3 text-center">
+      <div class="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-4"><p class="text-2xl font-extrabold">{{ chunk_size }}</p><p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">Chunk size</p></div>
+      <div class="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-4"><p class="text-2xl font-extrabold">{{ chunk_overlap }}</p><p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">Overlap</p></div>
+      <div class="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-4"><p class="text-2xl font-extrabold">{{ top_k }}</p><p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">Top-K retrieval</p></div>
+    </div>
+    <p class="text-xs text-slate-400 mt-3">RecursiveCharacterTextSplitter with paragraph → sentence → word separators. Tune via CHUNK_SIZE / CHUNK_OVERLAP / TOP_K in <code>.env</code>.</p>
+  </div>
+
+  <!-- Danger zone -->
+  <div class="rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-surface-card p-6 shadow-sm">
+    <h3 class="font-bold text-lg text-rose-600 dark:text-rose-400 mb-1">Danger Zone</h3>
+    <p class="text-xs text-slate-400 mb-4">Rebuild regenerates every vector from PostgreSQL chunks — safe, deterministic, useful after deploys on ephemeral hosts.</p>
+    <div class="flex flex-wrap gap-3">
+      <button id="rebuild-btn" class="rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition">♻ Rebuild FAISS index from DB</button>
+      <a href="{{ api_base }}/docs" target="_blank" class="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm font-semibold transition shadow-md shadow-brand-600/25">📖 Open API docs (Swagger)</a>
+    </div>
+  </div>
+
+  <p class="text-center text-xs text-slate-400 pb-4">DocuMind AI · FastAPI + SQLAlchemy 2.0 async + FAISS + Groq llama-3.3-70b-versatile · built for production demos</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("rebuild-btn").addEventListener("click", async () => {
+    toast("Rebuilding index… this re-embeds all stored chunks.", "info");
+    try {
+      const res = await API.post("/documents/rebuild-index", {});
+      toast(`Done — ${res.vectors} vectors indexed`, "success");
+    } catch (e) { toast(e.message, "error"); }
+  });
+
+  // Health grid
+  try {
+    const res = await fetch(`${API.base}/health`);
+    const h = await res.json();
+    const item = (label, value, ok) => `
+      <div class="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-4 text-center">
+        <p class="text-[11px] uppercase tracking-wide text-slate-400">${label}</p>
+        <p class="font-bold mt-1 ${ok === true ? "text-emerald-500" : ok === false ? "text-rose-500" : ""} truncate">${escapeHtml(String(value))}</p>
+      </div>`;
+    document.getElementById("health-grid").innerHTML =
+      item("Status", h.status, h.status === "ok") +
+      item("Database", h.database, h.database === "connected") +
+      item("FAISS vectors", h.faiss_vectors, null) +
+      item("LLM provider", h.llm_provider, !h.llm_provider.includes("NO KEY")) +
+      item("LLM model", h.llm_model, null) +
+      item("Embeddings", h.embedding_model, null);
+  } catch (e) {
+    document.getElementById("health-grid").innerHTML =
+      `<div class="col-span-3 text-center text-rose-500 text-sm py-4">Backend unreachable — start it with <code>uvicorn app.main:app --reload</code></div>`;
+  }
+});
+</script>
+{% endblock %}

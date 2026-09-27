@@ -1,0 +1,64 @@
+/* DocuMind AI – custom styles layered on top of Tailwind. */
+
+html { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+
+/* Subtle scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, .35); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, .6); }
+
+/* Skeleton loading shimmer */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(148, 163, 184, .18);
+  border-radius: 8px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* Chat typing indicator */
+.typing-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor; opacity: .5;
+  animation: blink 1.2s infinite both;
+}
+.typing-dot:nth-child(2) { animation-delay: .2s; }
+.typing-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+/* Citation chips */
+.cite-chip {
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.cite-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,70,229,.25); }
+
+/* Toast slide-in */
+.toast { animation: toast-in .25s ease-out; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Drop zone active state */
+.dropzone.dragover {
+  border-color: #4f46e5 !important;
+  background: rgba(99, 102, 241, .08) !important;
+}
+
+/* Answer markdown-ish rendering */
+.answer-body p { margin-bottom: .5rem; }
+.answer-body ul { list-style: disc; padding-left: 1.25rem; margin-bottom: .5rem; }
+.answer-body li { margin-bottom: .15rem; }
+
+/* Source snippet card hover */
+.source-card { transition: border-color .15s ease, background .15s ease; }
+.source-card:hover { border-color: rgba(99,102,241,.5); }
